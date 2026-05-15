@@ -1,0 +1,101 @@
+#!/bin/bash
+# Full Training Script - Comprehensive training run
+# This script runs the complete training with all 4 GPUs
+
+set -e  # Exit on error
+
+# Get the directory of this script
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+PROJECT_ROOT="$( cd "$SCRIPT_DIR/.." && pwd )"
+
+# Default paths (can be overridden)
+DATASET_ROOT="${DATASET_ROOT:-$PROJECT_ROOT/../dataset/processed/full_complete_benchmark_dataset}"
+# DATASET_ROOT="${DATASET_ROOT:-$PROJECT_ROOT/../dataset/processed/benchmark_dataset_21-50}"
+OUTPUT_DIR="${OUTPUT_DIR:-$PROJECT_ROOT/outputs/4-20_KNN_hid256_sam2_tiny}"
+
+echo "=========================================="
+echo "Full Training - Comprehensive Run"
+echo "=========================================="
+echo "Dataset root: $DATASET_ROOT"
+echo "Output directory: $OUTPUT_DIR"
+echo "GPUs: 4"
+echo "=========================================="
+
+# Fix memory fragmentation issues
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+
+# Run full training with comprehensive parameters
+# Node detector now uses mask-based peaks, so mask threshold/pooling control detection density.
+conda run -n sam_graph_split python "$SCRIPT_DIR/train.py" \
+    --dataset-root "$DATASET_ROOT" \
+    --output-dir "$OUTPUT_DIR" \
+    --sam-version "vit_b" \
+    --batch-size 96 \
+    --num-epochs 200 \
+    --learning-rate 1e-3 \
+    --weight-decay 1e-4 \
+    --gpus 4 \
+    --strategy "ddp" \
+    --num-workers 8 \
+    --log-every-n-steps 10 \
+    --val-check-interval 1.0 \
+    --early-stopping-patience 20 \
+    --node-loss-weight 1 \
+    --edge-loss-weight 10 \
+    --coverage-loss-weight 0 \
+    --coverage-label-smoothing 0.1 \
+    --heatmap-sigma 1.0 \
+    --heatmap-resolution 64 \
+    --use-lora \
+    --lora-rank 8 \
+    --edge-use-focal \
+    --edge-focal-alpha 0.25 \
+    --edge-focal-gamma 2.0 \
+    --edge-pos-weight 1.0 \
+    --adjacency-weight 2.0 \
+    --pair-weight 5.0 \
+    --k-neighbors 20 \
+    --neighbor-radius 512.0 \
+    --neighbor-sampler knn \
+    --asns-entmax-alpha 1.5 \
+    --max-nodes 20 \
+    --relation-transformer-layers 3 \
+    --relation-edge-dim 256 \
+    --relation-hidden-dim 128 \
+    --relation-num-heads 8 \
+    --relation-dropout 0.1 \
+    --rgb-feature-dim 32 \
+    --rgb-sequence-model transformer \
+    --rgb-seq-layers 2 \
+    --rgb-seq-heads 4 \
+    --rgb-neighborhood-aggregation mean \
+    --rgb-neighborhood-radius 1.0 \
+    --coordinate-noise-std 2.0 \
+    --edge-model edge_aware_transformer \
+    --no-edge-length-weighting \
+    --mask-threshold 0.5 \
+    --mask-pool-radius 16 \
+    --phase1-epochs 0 \
+    --node-finetune-lr-scale 1 \
+    --precision 32 \
+    --enable-diagnostics
+    # --use-hard-negative-mining \
+    # --hard-negative-threshold 0.3 \
+    # --max-hard-negatives-ratio 2.0 \
+    # --no-detach-l-i  # Uncomment to allow gradients from edge/coverage losses to flow back to local descriptor head
+
+echo ""
+echo "=========================================="
+echo "Full training completed!"
+echo "=========================================="
+echo "Check outputs in: $OUTPUT_DIR"
+echo "  - Logs: $OUTPUT_DIR/logs/"
+echo "  - Checkpoints: $OUTPUT_DIR/checkpoints/"
+echo "  - Training log: $OUTPUT_DIR/training.log"
+echo ""
+echo "To plot losses, run:"
+echo "  python $SCRIPT_DIR/plot_losses.py \\"
+echo "    --train-csv $OUTPUT_DIR/logs/train_losses.csv \\"
+echo "    --val-csv $OUTPUT_DIR/logs/val_losses.csv \\"
+echo "    --output-dir $OUTPUT_DIR/plots"
+echo "=========================================="
