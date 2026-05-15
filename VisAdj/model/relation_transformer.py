@@ -28,7 +28,7 @@ class RelationMicroTransformer(nn.Module):
     
     def __init__(
         self,
-        node_feature_dim: int = 128,
+        node_feature_dim: int = 256,
         z_star_dim: int = 256,
         edge_feature_dim: int = 256,
         num_layers: int = 4,

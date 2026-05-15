@@ -16,8 +16,8 @@ class EdgeAwareGraphTransformer(nn.Module):
     """
     Edge-aware Graph Transformer with line graph structure and geometric positional encoding.
     
-    Adapted for sam_graph_split framework:
-    - Uses sam_graph_split's feature pipeline (l_i, g_i, images, etc.)
+    Adapted for the VisAdj framework:
+    - Uses VisAdj's feature pipeline (l_i, g_i, images, etc.)
     - Supports RGB path sampling with coordinate conversion
     - Includes collinearity check in spatial features
     - Uses line graph attention for sparse, efficient computation
@@ -30,7 +30,7 @@ class EdgeAwareGraphTransformer(nn.Module):
     
     def __init__(
         self,
-        node_feature_dim: int = 128,
+        node_feature_dim: int = 256,
         z_star_dim: int = 256,  # Kept for interface compatibility, not used
         edge_feature_dim: int = 256,
         hidden_dim: int = 256,
@@ -306,7 +306,7 @@ class EdgeAwareGraphTransformer(nn.Module):
             scale_factor = self.image_size / self.heatmap_resolution  # 512 / 32 = 16 or 512 / 64 = 8
             node_coords_pixel = node_coords * scale_factor  # [B, N, 2] in pixel space
         
-        # Sample intermediate points along path (matching toy classifier: 20% → 80%)
+        # Sample intermediate points along path (matching toy classifier: 20% ->80%)
         t = torch.linspace(0.2, 0.8, num_samples, device=node_coords.device)
         coords_i = node_coords_pixel.unsqueeze(2).unsqueeze(3)  # [B, N, 1, 1, 2]
         coords_j = node_coords_pixel.unsqueeze(1).unsqueeze(3)  # [B, 1, N, 1, 2]
@@ -433,7 +433,7 @@ class EdgeAwareGraphTransformer(nn.Module):
         # 1. Euclidean distance (in image space, matching toy classifier)
         diff = coords_j - coords_i  # [B, N, N, 2]
         distance = torch.norm(diff, dim=-1, keepdim=True)  # [B, N, N, 1]
-        # Normalize by image diagonal (512*sqrt(2) ≈ 724) - matching toy classifier
+        # Normalize by image diagonal (512*sqrt(2) ->724) - matching toy classifier
         max_distance = self.image_size * np.sqrt(2.0)
         distance_norm = distance / max_distance
         

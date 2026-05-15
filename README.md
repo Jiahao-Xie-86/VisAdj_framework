@@ -1,25 +1,26 @@
 # VisAdj: Learning Adjacency Matrices From Node-Link Images
 
-A deep learning framework for converting node-link images to adjacency matrices using SAM (Segment Anything Model) as the visual backbone.
+A SAM-family image-to-graph framework that predicts adjacency matrices from node-link images with adaptive candidate sampling and line-graph edge reasoning.
 
 ## Overview
 
-This project implements a novel architecture that extracts graph structures from visual representations. It takes node-link diagram images as input and outputs corresponding adjacency matrices, enabling automated graph extraction from visualizations. The framework is particularly effective for road network extraction, vascular network analysis, and general graph structure recovery from images.
+VisAdj extracts graph structure from visual node-link representations. Given an image, it detects nodes, constructs a sparse candidate edge set with ASNS, and predicts the final adjacency matrix using a Line-Graph Transformer (LineGT) that reasons directly over candidate edge tokens. The framework supports synthetic graph diagrams, road network extraction, and retinal vessel graph reconstruction.
 
 ### Key Features
 
-- **SAM-based Visual Encoder**: Leverages frozen SAM encoder as a powerful visual backbone
-- **Dual-Stream Architecture**: Combines local (geometry) and global (topology) feature streams
-- **Attention-Sparse Neighbor Sampler (ASNS)**: Efficient neighbor sampling for edge prediction
-- **Relation Transformer**: Set-based edge reasoning for accurate adjacency prediction
-- **Multi-Dataset Support**: Works with various benchmark datasets including Synthetic graphs, US-Cities, OCTA500, Toulouse, and SpaceNet
-- **Comprehensive Evaluation**: Supports node detection, edge prediction, and graph structure metrics
+- **SAM-family Visual Backbone**: Supports SAM, SAM2, and SAM3 encoders with optional LoRA fine-tuning.
+- **Dual-Stream Image Features**: Combines local node descriptors with global topology-aware visual context.
+- **Global Topology Tokens**: Aggregates image-level structural cues before edge reasoning.
+- **Adaptive Sparse Neighbor Sampler (ASNS)**: Learns a sparse top-$K$ candidate edge set instead of relying on fixed KNN alone.
+- **Line-Graph Transformer (LineGT)**: Treats candidate edges as tokens and models dependencies among incident edges.
+- **Scheduled Teacher Forcing**: Stabilizes edge training early and gradually transitions to predicted nodes.
+- **Graph-Centric Evaluation**: Reports node, edge, topology, GIR, and GED metrics across Synthetic, Toulouse, US-Cities, and OCTA500.
 
 ## Hyperparameter settings in VisAdj
 | Hyperparameter | Value |
 |---|---:|
-| Learning rate for all methods | 1e-4 |
-| Learning rate for LoRA fine-tuning | 1e-5 |
+| Learning rate for all methods | 1e-3 |
+| Learning rate for LoRA fine-tuning | 1e-4 |
 | Batch size | 96 |
 | Local feature dimension $D_L$ | 256 |
 | Global feature dimension $D_G$ | 256 |
@@ -27,26 +28,26 @@ This project implements a novel architecture that extracts graph structures from
 | Edge hidden dimension $D_E$ | 128 |
 | Visual feature dimension $D_{\text{vis}}$ | 32 |
 | Ratio of global feature map $\lambda_G$ | 4 |
-| Number of topology tokens $K_T$ | 8 |
+| Number of topology tokens $K_T$ | 16 |
 | Node peak confidence threshold $\tau$ | 0.5 |
 | NMS neighbor radius $r$ | 15 |
 | Soft-argmax temperature $T$ | 0.2 |
 | Number of ASNS attention heads $N_h$ | 8 |
 | Entmax sparsity parameter $\alpha_{ent}$ | 1.5 |
-| Top-$K$ neighbors per node $K$ | 10 |
+| Top-$K$ neighbors per node $K$ | 8 for Toulouse and 12 for other datasets |
 | Number of Bézier samples $N_v$ | 9 |
 | Visual feature neighborhood radius $r_n$ | 3 |
 | Node matching threshold $\tau_d$ | 8 |
 | Gaussian noise std. $\sigma$ | 0.1 |
-| Node loss weight $\lambda_{\text{node}}$ | 2 |
-| Edge loss weight $\lambda_{\text{edge}}$ | 5 |
+| Node loss weight $\lambda_{\text{node}}$ | 1 |
+| Edge loss weight $\lambda_{\text{edge}}$ | 10 |
 | Coverage loss weight $\lambda_{\text{cover}}$ | 1 |
 | Cross-entropy weight $\lambda_{\text{ce}}$ | 0.5 |
 | MSE weight $\lambda_{\text{mse}}$ | 0.5 |
 | Focal loss balance $\alpha_f$ | 0.5 |
 | Focal loss focusing $\gamma$ | 0.5 |
 | Coverage smoothing $\alpha_s$ | 0.2 |
-|Teacher-forcing decay length $T_s$ | 30 |
+| Teacher-forcing decay length $T_s$ | 30 |
 
 ## Project Structure
 
@@ -80,7 +81,6 @@ This project implements a novel architecture that extracts graph structures from
 │   ├── losses/                      # Loss functions
 │   │   └── combined_loss.py
 │   ├── utils/                       # Utility functions
-│   ├── config/                      # Configuration files
 │   ├── sam3_checkpoints/           # SAM3 model checkpoints
 │   ├── sam2_checkpoints/           # SAM2 model checkpoints
 │   └── sam_checkpoint/              # SAM checkpoints (legacy)
@@ -120,8 +120,8 @@ The model consists of several key components:
    - **Global stream**: Downsampled features for topology understanding (8×8)
 3. **Node Detector**: Predicts node locations using heatmap-based detection with NMS
 4. **Neighbor Sampler**: ASNS (Attention-Sparse Neighbor Sampler) or KNN-based sampling for efficient edge candidate selection
-5. **Relation Transformer**: Processes node pairs to predict edge existence using transformer architecture
-6. **Edge Predictor**: Final edge prediction module (Edge-Aware Graph Transformer or Pairwise MLP)
+5. **Line-Graph Transformer (LineGT)**: Represents candidate edges as tokens and restricts attention to incident edges that share endpoints
+6. **Edge Predictor**: Maps refined edge tokens to adjacency logits and converts them into the predicted adjacency matrix
 
 ## Installation
 
@@ -166,9 +166,9 @@ pip install -r requirement.txt
      - [SAM2 Base+](https://dl.fbaipublicfiles.com/segment_anything_2/095919/sam2.1_hiera_base_plus.pt) and [config](https://github.com/facebookresearch/segment-anything-2/blob/main/sam2_hiera_b+.yaml)
      - [SAM2 Large](https://dl.fbaipublicfiles.com/segment_anything_2/095919/sam2.1_hiera_large.pt) and [config](https://github.com/facebookresearch/segment-anything-2/blob/main/sam2_hiera_l.yaml)
     
-    **SAM4 Checkpoints**:
-   - Download4 SAM checkpoints from the [official repository](https://github.com/facebookresearch/sam3)
-   - Place checkpoint files in `VisAdj/sam3_checkpoint/`
+    **SAM3 Checkpoints**:
+   - Download SAM3 checkpoints from the [official repository](https://github.com/facebookresearch/sam3)
+   - Place checkpoint files in `VisAdj/sam3_checkpoints/`
    - Supported versions: `sam3.pt`
    - Download links:
      - [SAM 3](https://huggingface.co/facebook/sam3/tree/main)
@@ -209,16 +209,21 @@ cd VisAdj/training
 python train.py \
     --dataset-root /path/to/dataset/processed/full_complete_benchmark_dataset \
     --output-dir outputs/full_training \
-    --sam-version "vit-b" \
+    --sam-version vit_b \
     --batch-size 96 \
     --num-epochs 200 \
     --gpus 4 \
     --strategy ddp \
     --learning-rate 1e-3 \
-    --k-neighbors 20 \
+    --use-lora \
+    --lora-rank 8 \
+    --neighbor-sampler asns \
+    --k-neighbors 12 \
+    --coverage-loss-weight 1 \
     --max-nodes 20 \
     --node-loss-weight 1 \
-    --edge-loss-weight 10
+    --edge-loss-weight 10 \
+    --teacher-forcing-epochs 30
 ```
 
 #### Dataset-Specific Training

@@ -48,7 +48,7 @@ class SAMGraphSplit(nn.Module):
         image_size: int = 512,
         local_feature_dim: int = 256,
         global_feature_dim: int = 256,
-        node_feature_dim: int = 128,
+        node_feature_dim: int = 256,
         num_topology_tokens: int = 16,
         topology_token_dim: int = 256,
         k_neighbors: int = 20,
@@ -234,7 +234,7 @@ class SAMGraphSplit(nn.Module):
                 rgb_neighborhood_aggregation=rgb_neighborhood_aggregation,
                 rgb_neighborhood_radius=rgb_neighborhood_radius,
                 g_prime_dim=global_feature_dim,  # Dimension of G_prime features (topology features)
-                topology_feature_dim=0,  # Output dimension for topology features (0 = disabled)
+                topology_feature_dim=4,  # Output dimension for topology features (0 = disabled)
                 spatial_feature_dim=4,  # Output dimension for spatial features (after projection)
             )
         else:

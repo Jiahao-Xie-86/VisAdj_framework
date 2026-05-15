@@ -184,7 +184,7 @@ class GraphTransformer(nn.Module):
     
     def __init__(
         self,
-        node_feature_dim: int = 128,
+        node_feature_dim: int = 256,
         z_star_dim: int = 256,
         edge_feature_dim: int = 512,  # Increased from 256 to 512 for richer representations
         num_layers: int = 6,  # Increased from 4 to 6 for deeper reasoning

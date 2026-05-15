@@ -19,8 +19,8 @@ project_root = project_root.resolve()  # Convert to absolute path
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
-from sam_graph_split.evaluation.graph_isomorphism_evaluator import GraphIsomorphismEvaluator
-from sam_graph_split.evaluation.topo_metrics_helper import compute_topo_metrics
+from VisAdj.evaluation.graph_isomorphism_evaluator import GraphIsomorphismEvaluator
+from VisAdj.evaluation.topo_metrics_helper import compute_topo_metrics
 import networkx as nx
 
 

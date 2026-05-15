@@ -12,7 +12,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from .layer_norm_2d import LayerNorm2d
-from sam_graph_split.utils.nms import _nms_coords
+from VisAdj.utils.nms import _nms_coords
 
 
 class CoordConv(nn.Module):
@@ -46,7 +46,7 @@ class NodeDetector(nn.Module):
         self,
         local_feature_dim: int = 256,
         global_feature_dim: int = 256,
-        node_feature_dim: int = 128,
+        node_feature_dim: int = 256,
         mask_threshold: float = 0.5,
         mask_pool_radius: int = 16,
         max_nodes: int = 50,

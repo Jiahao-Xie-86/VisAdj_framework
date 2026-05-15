@@ -21,19 +21,19 @@ from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping, Learning
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.strategies import DDPStrategy
 
-# Add Image2matrix_baselines root to path to use sam_graph_split as a package
+# Add project root to path to use VisAdj as a package
 # This avoids conflicts with other 'dataset' modules in sibling directories
 image2matrix_root = Path(__file__).parent.parent.parent
 if str(image2matrix_root) not in sys.path:
     sys.path.insert(0, str(image2matrix_root))
 
-# Use absolute imports with sam_graph_split prefix to avoid conflicts
-from sam_graph_split.model.sam_graph_split import SAMGraphSplit
-from sam_graph_split.dataset.image2matrix_dataset import Image2MatrixDataset, collate_fn
-from sam_graph_split.losses.combined_loss import CombinedLoss
-from sam_graph_split.training.csv_logger import CSVLogger
-from sam_graph_split.training.tqdm_logger import FileTQDMProgressBar
-from sam_graph_split.training.tee_output import TeeOutput
+# Use absolute imports with the VisAdj package prefix to avoid conflicts
+from VisAdj.model.sam_graph_split import SAMGraphSplit
+from VisAdj.dataset.image2matrix_dataset import Image2MatrixDataset, collate_fn
+from VisAdj.losses.combined_loss import CombinedLoss
+from VisAdj.training.csv_logger import CSVLogger
+from VisAdj.training.tqdm_logger import FileTQDMProgressBar
+from VisAdj.training.tee_output import TeeOutput
 
 
 # Configure logging
@@ -169,6 +169,7 @@ class SAMGraphSplitLightning(pl.LightningModule):
         detach_l_i: bool = True,  # Whether to detach l_i before passing to ASNS and relation transformer
         phase1_epochs: int = 20,
         node_finetune_lr_scale: float = 0.2,
+        teacher_forcing_epochs: int = 30,
         coordinate_noise_std: float = 2.0,  # Standard deviation of coordinate noise in pixels (for training robustness). Updated to match window=9 accuracy (mean offset: 1.52px, std: 0.73px)
     ):
         super().__init__()
@@ -241,6 +242,7 @@ class SAMGraphSplitLightning(pl.LightningModule):
         self.detach_l_i = detach_l_i
         self.phase1_epochs = phase1_epochs
         self.node_finetune_lr_scale = node_finetune_lr_scale
+        self.teacher_forcing_epochs = teacher_forcing_epochs
         self.neighbor_sampler = neighbor_sampler.lower() if neighbor_sampler else 'asns'
         self._base_param_lrs = {}
         self._current_phase = None
@@ -262,6 +264,15 @@ class SAMGraphSplitLightning(pl.LightningModule):
         rank = getattr(trainer, 'global_rank', 0) if trainer is not None else 0
         if rank == 0:
             logger.info(message)
+
+    def _teacher_forcing_probability(self) -> float:
+        """Linearly decay teacher forcing probability from 1 to 0."""
+        horizon = int(getattr(self.hparams, "teacher_forcing_epochs", 0))
+        if horizon <= 0:
+            return 0.0
+
+        edge_epoch = max(0, int(self.current_epoch) - int(getattr(self.hparams, "phase1_epochs", 0)))
+        return max(0.0, 1.0 - float(edge_epoch) / float(horizon))
 
     def _log_gradients(self):
         """Log gradient norms for key sub-modules (every optimizer step)."""
@@ -479,7 +490,7 @@ class SAMGraphSplitLightning(pl.LightningModule):
                     
                     # Convert GT coordinates from image space to global space (for global_processed)
                     # First convert to heatmap space, then to global space (same as node_detector)
-                    # Convert image space → heatmap space → global space (matching node_detector logic)
+                    # Convert image space ->heatmap space ->global space (matching node_detector logic)
                     unmatched_gt_coords_global = unmatched_gt_coords_local.clone()  # Start from heatmap space coords
                     if W_local > 1:
                         unmatched_gt_coords_global[:, 0] = unmatched_gt_coords_local[:, 0] * (W_global - 1) / (W_local - 1)
@@ -702,7 +713,7 @@ class SAMGraphSplitLightning(pl.LightningModule):
         # OPTIMIZATION: Pad GT coordinates to enable batched matching (eliminates 128 sequential function calls)
         t1 = time.time()
         if gt_node_coords is not None and isinstance(gt_node_coords, list):
-            from sam_graph_split.losses.combined_loss import match_nodes_hungarian, permute_adjacency_to_predicted_space
+            from VisAdj.losses.combined_loss import match_nodes_hungarian, permute_adjacency_to_predicted_space
             
             N_pred = node_coords.shape[1]
             device = node_coords.device
@@ -777,11 +788,33 @@ class SAMGraphSplitLightning(pl.LightningModule):
         # Store original valid_mask for node count error computation
         # (before it gets replaced with permuted mask)
         valid_mask_original = valid_mask.clone()  # [B, N_pred] - original predicted nodes
+
+        teacher_forcing_prob = self._teacher_forcing_probability()
+        use_teacher_forcing = (
+            node_permutation is not None and
+            gt_node_coords is not None and
+            torch.rand((), device=images.device).item() < teacher_forcing_prob
+        )
+        self.log(
+            'train/teacher_forcing_prob',
+            torch.tensor(teacher_forcing_prob, device=images.device),
+            on_step=True,
+            on_epoch=True,
+            sync_dist=True,
+        )
+        self.log(
+            'train/use_teacher_forcing',
+            torch.tensor(float(use_teacher_forcing), device=images.device),
+            on_step=True,
+            on_epoch=True,
+            sync_dist=True,
+        )
         
-        # Permute node features to GT order if matching is available.
+        # Scheduled teacher forcing: only condition edge reasoning on GT-order nodes
+        # for a decaying fraction of training batches.
         t2 = time.time()
         use_matched_nodes = False
-        if node_permutation is not None and gt_node_coords is not None:
+        if use_teacher_forcing:
             node_coords, l_i, g_i, valid_mask = self._permute_node_features_to_gt_order(
                 node_coords=node_coords,
                 l_i=l_i,
@@ -874,7 +907,7 @@ class SAMGraphSplitLightning(pl.LightningModule):
         t_transformer = time.time() - t4
         
         # ============================================================
-        # Loss Computation in Order: Node → Edge → Coverage → Budget
+        # Loss Computation in Order: Node ->Edge ->Coverage ->Budget
         # ============================================================
         
         # Step 1: Compute Node Loss
@@ -1173,7 +1206,7 @@ class SAMGraphSplitLightning(pl.LightningModule):
         # Handle list format from collate_fn (variable-sized data)
         # OPTIMIZATION: Pad GT coordinates to enable batched matching (eliminates 128 sequential function calls)
         if gt_node_coords is not None and isinstance(gt_node_coords, list):
-            from sam_graph_split.losses.combined_loss import match_nodes_hungarian, permute_adjacency_to_predicted_space
+            from VisAdj.losses.combined_loss import match_nodes_hungarian, permute_adjacency_to_predicted_space
             
             N_pred = node_coords.shape[1]
             device = node_coords.device
@@ -1244,10 +1277,11 @@ class SAMGraphSplitLightning(pl.LightningModule):
         # when edge and coverage losses are disabled (weight=0)
         skip_edge_ops = (self.loss_fn.edge_weight == 0 and self.loss_fn.coverage_weight == 0)
         
-        # Permute node features to GT order if matching is available.
-        # NOTE: We still need permutation for node count error computation, so we do it even in Phase 1
+        # Validation follows the test-time setting: edge reasoning uses predicted
+        # nodes only. Matching is still computed above for supervision/evaluation.
+        use_teacher_forcing = False
         use_matched_nodes = False
-        if node_permutation is not None and gt_node_coords is not None:
+        if use_teacher_forcing and node_permutation is not None and gt_node_coords is not None:
             # OPTIMIZATION: Skip expensive unmatched GT node feature extraction if edge/coverage are disabled
             if skip_edge_ops:
                 # Only permute matched nodes (skip unmatched GT node feature extraction)
@@ -1365,7 +1399,7 @@ class SAMGraphSplitLightning(pl.LightningModule):
             )
         
         # ============================================================
-        # Loss Computation in Order: Node → Edge → Coverage → Budget
+        # Loss Computation in Order: Node ->Edge ->Coverage ->Budget
         # ============================================================
         
         # Step 1: Compute Node Loss
@@ -1654,7 +1688,7 @@ class SAMGraphSplitLightning(pl.LightningModule):
             weight_decay=self.weight_decay,
         )
         
-        # Composite LR schedule: 5% warmup → 40% constant → 55% cosine decay
+        # Composite LR schedule: 5% warmup ->40% constant ->55% cosine decay
         total_epochs = getattr(self.trainer, 'max_epochs', None)
         if total_epochs is None or total_epochs <= 0:
             total_epochs = getattr(self.hparams, 'num_epochs', 1)
@@ -1855,7 +1889,7 @@ def main():
     parser.add_argument('--mask-threshold', type=float, default=0.5,
                         help='Sigmoid probability threshold for selecting mask peaks (default: 0.5).')
     parser.add_argument('--mask-pool-radius', type=int, default=16,
-                        help='Radius for local max pooling when extracting nodes from the mask (default: 16 → 33×33 kernel).')
+                        help='Radius for local max pooling when extracting nodes from the mask (default: 16 ->33×33 kernel).')
     
     # Training parameters
     parser.add_argument('--batch-size', type=int, default=16,
@@ -1897,6 +1931,8 @@ def main():
                         help='Number of initial epochs to train node detector only before enabling edge/coverage losses.')
     parser.add_argument('--node-finetune-lr-scale', type=float, default=0.2,
                         help='LR scale applied to node detector param group after phase1 (default: 0.2).')
+    parser.add_argument('--teacher-forcing-epochs', type=int, default=30,
+                        help='Number of edge-training epochs over which teacher forcing probability linearly decays to zero. Set 0 to disable teacher forcing.')
     
     args = parser.parse_args()
     
@@ -2139,6 +2175,7 @@ def main():
         detach_l_i=args.detach_l_i,
         phase1_epochs=args.phase1_epochs,
         node_finetune_lr_scale=args.node_finetune_lr_scale,
+        teacher_forcing_epochs=args.teacher_forcing_epochs,
     )
     
     # Create callbacks
@@ -2174,7 +2211,7 @@ def main():
     # Create logger
     tb_logger = TensorBoardLogger(
         save_dir=log_dir,
-        name='sam_graph_split',
+        name='VisAdj',
         default_hp_metric=False,
     )
     

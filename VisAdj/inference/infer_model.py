@@ -16,9 +16,9 @@ from typing import Optional
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from sam_graph_split.model import SAMGraphSplit
-from sam_graph_split.dataset import Image2MatrixDataset, collate_fn
-from sam_graph_split.training.train import SAMGraphSplitLightning
+from VisAdj.model import SAMGraphSplit
+from VisAdj.dataset import Image2MatrixDataset, collate_fn
+from VisAdj.training.train import SAMGraphSplitLightning
 import pytorch_lightning as pl
 
 import logging
@@ -54,26 +54,11 @@ def load_model_from_checkpoint(checkpoint_path, device='cuda'):
             else:
                 hparams['sam_version'] = str(hparams['sam_version'])
     else:
-        import sam_graph_split.config.phase1_config as config
-        hparams = {
-            'sam_version': config.SAM_VERSION,
-            'sam_checkpoint': config.SAM_CHECKPOINT,
-            'freeze_encoder': config.FREEZE_ENCODER,
-            'image_size': config.IMAGE_SIZE,
-            'local_feature_dim': config.LOCAL_FEATURE_DIM,
-            'global_feature_dim': config.GLOBAL_FEATURE_DIM,
-            'node_feature_dim': 128,
-            'num_topology_tokens': 16,
-            'topology_token_dim': 256,
-            'k_neighbors': 20,
-            'neighbor_radius': 256.0,
-            'max_nodes': 50,  # Default, should match training config
-            'relation_transformer_layers': 2,
-            'heatmap_resolution': 32,
-            'heatmap_sigma': 1.5,
-            'use_lora': True,
-            'lora_rank': 8,
-        }
+        raise KeyError(
+            "Checkpoint does not contain 'hyper_parameters'. "
+            "Please use a checkpoint saved by SAMGraphSplitLightning so inference "
+            "can restore the training-time model configuration."
+        )
     
     # Ensure sam_version is a string
     if not isinstance(hparams.get('sam_version'), str):
@@ -284,36 +269,36 @@ def run_inference(
         print(f"\nApplying hyperparameter tuning:")
         if mask_threshold is not None and mask_threshold != current_mask_threshold:
             model.model.node_detector.mask_threshold = mask_threshold
-            print(f"  mask_threshold: {current_mask_threshold} → {mask_threshold}")
+            print(f"  mask_threshold: {current_mask_threshold} -> {mask_threshold}")
         if mask_pool_radius is not None and mask_pool_radius != current_mask_pool_radius:
             model.model.node_detector.mask_pool_radius = int(mask_pool_radius)
             kernel = 2 * int(mask_pool_radius) + 1
-            print(f"  mask_pool_radius: {current_mask_pool_radius} → {mask_pool_radius} (kernel: {kernel}×{kernel})")
+            print(f"  mask_pool_radius: {current_mask_pool_radius} -> {mask_pool_radius} (kernel: {kernel}x{kernel})")
         if nms_radius is not None:
             # Convert to float and set
             nms_radius_val = float(nms_radius)
             model.model.node_detector.nms_radius = nms_radius_val
-            print(f"  nms_radius: {current_nms_radius} → {nms_radius_val}")
+            print(f"  nms_radius: {current_nms_radius} -> {nms_radius_val}")
         if max_nodes is not None and max_nodes != current_max_nodes:
             model.model.node_detector.max_nodes = max_nodes
-            print(f"  max_nodes: {current_max_nodes} → {max_nodes}")
+            print(f"  max_nodes: {current_max_nodes} -> {max_nodes}")
         if k_neighbors is not None and current_k_neighbors is not None and k_neighbors != current_k_neighbors:
             model.model.asns.k_neighbors = k_neighbors
-            print(f"  k_neighbors: {current_k_neighbors} → {k_neighbors}")
+            print(f"  k_neighbors: {current_k_neighbors} -> {k_neighbors}")
         if neighbor_radius is not None:
             if current_neighbor_radius is not None and neighbor_radius != current_neighbor_radius:
                 model.model.asns.neighbor_radius = neighbor_radius
-                print(f"  neighbor_radius: {current_neighbor_radius} → {neighbor_radius}")
+                print(f"  neighbor_radius: {current_neighbor_radius} -> {neighbor_radius}")
             elif current_neighbor_radius is None:
                 print("  neighbor_radius override ignored (sampler does not use neighbor_radius)")
         if edge_threshold != current_edge_threshold:
-            print(f"  edge_threshold: {current_edge_threshold} → {edge_threshold}")
+            print(f"  edge_threshold: {current_edge_threshold} -> {edge_threshold}")
         if rgb_neighborhood_aggregation is not None:
             rt = getattr(model.model, "relation_transformer", None)
             if rt is not None:
                 old_agg = getattr(rt, "rgb_neighborhood_aggregation", None)
                 rt.rgb_neighborhood_aggregation = rgb_neighborhood_aggregation
-                print(f"  rgb_neighborhood_aggregation: {old_agg} → {rgb_neighborhood_aggregation}")
+                print(f"  rgb_neighborhood_aggregation: {old_agg} -> {rgb_neighborhood_aggregation}")
             else:
                 print("  rgb_neighborhood_aggregation override ignored (no relation_transformer on model)")
         if rgb_neighborhood_radius is not None:
@@ -321,7 +306,7 @@ def run_inference(
             if rt is not None:
                 old_radius = getattr(rt, "rgb_neighborhood_radius", None)
                 rt.rgb_neighborhood_radius = rgb_neighborhood_radius
-                print(f"  rgb_neighborhood_radius: {old_radius} → {rgb_neighborhood_radius}")
+                print(f"  rgb_neighborhood_radius: {old_radius} -> {rgb_neighborhood_radius}")
             else:
                 print("  rgb_neighborhood_radius override ignored (no relation_transformer on model)")
         print("=" * 80)
@@ -496,7 +481,7 @@ def run_inference(
         print("GENERATING VISUALIZATIONS")
         print("=" * 80)
         try:
-            from sam_graph_split.inference.visualize_predictions import save_visualizations_from_predictions
+            from VisAdj.inference.visualize_predictions import save_visualizations_from_predictions
             save_visualizations_from_predictions(
                 predictions_dir=output_dir,
                 dataset_root=Path(dataset_path),
@@ -532,7 +517,7 @@ if __name__ == '__main__':
     parser.add_argument('--mask-pool-radius', type=int, default=None, help='Mask pooling radius (kernel size = 2 * radius + 1). If not specified, uses model default.')
     parser.add_argument('--nms-radius', type=float, default=None, help='NMS radius for peak suppression in pixels. If not specified, uses mask_pool_radius. Allows separate tuning of peak detection (mask_pool_radius) vs peak suppression (nms_radius).')
     parser.add_argument('--max-nodes', type=int, default=None, help='Maximum nodes to detect (20-100). If not specified, uses model default.')
-    parser.add_argument('--k-neighbors', type=int, default=None, help='Number of neighbors for KNN (8-20). If not specified, uses model default.')
+    parser.add_argument('--k-neighbors', type=int, default=None, help='Number of retained candidate neighbors. If not specified, uses model default.')
     parser.add_argument('--neighbor-radius', type=float, default=None, help='Neighbor radius in pixels (32-256). If not specified, uses model default.')
     parser.add_argument('--edge-threshold', type=float, default=None, help='Threshold for edge binarization (0.1-0.9). Lower values detect more edges, higher values detect fewer edges. Default: 0.5')
     parser.add_argument('--use-gt-nodes', action='store_true', help='Use ground-truth node coordinates (bypasses node detector + ASNS) to isolate edge detection performance.')

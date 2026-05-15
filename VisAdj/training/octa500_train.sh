@@ -52,7 +52,7 @@ conda run -n sam_graph_split python "$SCRIPT_DIR/train.py" \
     --early-stopping-patience 20 \
     --node-loss-weight 1 \
     --edge-loss-weight 10 \
-    --coverage-loss-weight 0 \
+    --coverage-loss-weight 1 \
     --coverage-label-smoothing 0.1 \
     --heatmap-sigma 1.0 \
     --heatmap-resolution $HEATMAP_RESOLUTION \
@@ -65,9 +65,9 @@ conda run -n sam_graph_split python "$SCRIPT_DIR/train.py" \
     --edge-pos-weight 1.0 \
     --adjacency-weight 2.0 \
     --pair-weight 5.0 \
-    --k-neighbors 5 \
+    --k-neighbors 12 \
     --neighbor-radius $NEIGHBOR_RADIUS \
-    --neighbor-sampler knn \
+    --neighbor-sampler asns \
     --asns-entmax-alpha 1.5 \
     --max-nodes 20 \
     --relation-transformer-layers 3 \
@@ -87,6 +87,7 @@ conda run -n sam_graph_split python "$SCRIPT_DIR/train.py" \
     --mask-threshold 0.5 \
     --mask-pool-radius $MASK_POOL_RADIUS \
     --phase1-epochs 0 \
+    --teacher-forcing-epochs 30 \
     --node-finetune-lr-scale 1 \
     --precision 32 \
     --enable-diagnostics

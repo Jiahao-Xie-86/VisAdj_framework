@@ -33,8 +33,8 @@ else
     FULL_CHECKPOINT_DIR="outputs/$CHECKPOINT_DIR"
 fi
 
-CHECKPOINT_PATH="$PROJECT_ROOT/sam_graph_split/$FULL_CHECKPOINT_DIR/checkpoints/best-epoch=epoch=005.ckpt"
-OUTPUT_DIR="$PROJECT_ROOT/sam_graph_split/$FULL_CHECKPOINT_DIR/predictions_${SPLIT}"
+CHECKPOINT_PATH="$PROJECT_ROOT/VisAdj/$FULL_CHECKPOINT_DIR/checkpoints/best-epoch=epoch=005.ckpt"
+OUTPUT_DIR="$PROJECT_ROOT/VisAdj/$FULL_CHECKPOINT_DIR/predictions_${SPLIT}"
 
 if [ ! -f "$CHECKPOINT_PATH" ]; then
     echo "Error: Checkpoint not found: $CHECKPOINT_PATH"
@@ -72,7 +72,7 @@ PYTHONPATH="$PROJECT_ROOT:$PYTHONPATH" conda run -n sam_graph_split python "$SCR
     --mask-pool-radius 4 \
     --nms-radius 4 \
     --max-nodes 9 \
-    --k-neighbors 4 \
+    --k-neighbors 8 \
     --neighbor-radius 64 \
     --edge-threshold 0.8 \
     --rgb-neighborhood-aggregation mean \
