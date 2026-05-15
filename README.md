@@ -15,6 +15,40 @@ This project implements a novel architecture that extracts graph structures from
 - **Multi-Dataset Support**: Works with various benchmark datasets including Synthetic graphs, US-Cities, OCTA500, Toulouse, and SpaceNet
 - **Comprehensive Evaluation**: Supports node detection, edge prediction, and graph structure metrics
 
+## Hyperparameter settings in VisAdj
+| Hyperparameter | Value |
+|---|---:|
+| Learning rate for all methods | 1e-4 |
+| Learning rate for LoRA fine-tuning | 1e-5 |
+| Batch size | 96 |
+| Local feature dimension $D_L$ | 256 |
+| Global feature dimension $D_G$ | 256 |
+| Node descriptor dimension $D_N$ | 256 |
+| Edge hidden dimension $D_E$ | 128 |
+| Visual feature dimension $D_{\text{vis}}$ | 32 |
+| Ratio of global feature map $\lambda_G$ | 4 |
+| Number of topology tokens $K_T$ | 8 |
+| Node peak confidence threshold $\tau$ | 0.5 |
+| NMS neighbor radius $r$ | 15 |
+| Soft-argmax temperature $T$ | 0.2 |
+| Number of ASNS attention heads $N_h$ | 8 |
+| Entmax sparsity parameter $\alpha_{ent}$ | 1.5 |
+| Top-$K$ neighbors per node $K$ | 10 |
+| Number of Bézier samples $N_v$ | 9 |
+| Visual feature neighborhood radius $r_n$ | 3 |
+| Node matching threshold $\tau_d$ | 8 |
+| Gaussian noise std. $\sigma$ | 0.1 |
+| Node loss weight $\lambda_{\text{node}}$ | 2 |
+| Edge loss weight $\lambda_{\text{edge}}$ | 5 |
+| Coverage loss weight $\lambda_{\text{cover}}$ | 1 |
+| Cross-entropy weight $\lambda_{\text{ce}}$ | 0.5 |
+| MSE weight $\lambda_{\text{mse}}$ | 0.5 |
+| Focal loss balance $\alpha_f$ | 0.5 |
+| Focal loss focusing $\gamma$ | 0.5 |
+| Coverage smoothing $\alpha_s$ | 0.2 |
+|Teacher-forcing decay length $T_s$ | 30 |
+|
+
 ## Project Structure
 
 ```
