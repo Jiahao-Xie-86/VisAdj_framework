@@ -8,7 +8,7 @@ This project implements a novel architecture that extracts graph structures from
 
 ### Key Features
 
-- **SAM2-based Visual Encoder**: Leverages frozen SAM2 encoder as a powerful visual backbone
+- **SAM-based Visual Encoder**: Leverages frozen SAM encoder as a powerful visual backbone
 - **Dual-Stream Architecture**: Combines local (geometry) and global (topology) feature streams
 - **Attention-Sparse Neighbor Sampler (ASNS)**: Efficient neighbor sampling for edge prediction
 - **Relation Transformer**: Set-based edge reasoning for accurate adjacency prediction
@@ -49,6 +49,7 @@ This project implements a novel architecture that extracts graph structures from
 │   │   └── combined_loss.py
 │   ├── utils/                       # Utility functions
 │   ├── config/                      # Configuration files
+│   ├── sam3_checkpoints/           # SAM3 model checkpoints
 │   ├── sam2_checkpoints/           # SAM2 model checkpoints
 │   └── sam_checkpoint/              # SAM checkpoints (legacy)
 ├── Dataset/                         # Dataset generation scripts
@@ -81,7 +82,7 @@ This project implements a novel architecture that extracts graph structures from
 
 The model consists of several key components:
 
-1. **SAM2 Encoder**: Frozen visual encoder that extracts rich visual features from input images
+1. **SAM Encoder**: Frozen visual encoder that extracts rich visual features from input images
 2. **Dual-Stream Extractor**: 
    - **Local stream**: High-resolution features at encoder grid resolution (32×32 for 512×512 input)
    - **Global stream**: Downsampled features for topology understanding (8×8)
@@ -112,7 +113,7 @@ conda activate sam_graph_split
 pip install -r requirement.txt
 ```
 
-3. **Download SAM and SAM2 checkpoints**:
+3. **Download SAM, SAM2 and SAM3 checkpoints**:
    
    **SAM Checkpoints**:
    - Download SAM checkpoints from the [official repository](https://github.com/facebookresearch/segment-anything)
@@ -132,6 +133,13 @@ pip install -r requirement.txt
      - [SAM2 Tiny](https://dl.fbaipublicfiles.com/segment_anything_2/095919/sam2.1_hiera_tiny.pt) and [config](https://github.com/facebookresearch/segment-anything-2/blob/main/sam2_hiera_t.yaml)
      - [SAM2 Base+](https://dl.fbaipublicfiles.com/segment_anything_2/095919/sam2.1_hiera_base_plus.pt) and [config](https://github.com/facebookresearch/segment-anything-2/blob/main/sam2_hiera_b+.yaml)
      - [SAM2 Large](https://dl.fbaipublicfiles.com/segment_anything_2/095919/sam2.1_hiera_large.pt) and [config](https://github.com/facebookresearch/segment-anything-2/blob/main/sam2_hiera_l.yaml)
+    
+    **SAM4 Checkpoints**:
+   - Download4 SAM checkpoints from the [official repository](https://github.com/facebookresearch/sam3)
+   - Place checkpoint files in `VisAdj/sam3_checkpoint/`
+   - Supported versions: `sam3.pt`
+   - Download links:
+     - [SAM 3](https://huggingface.co/facebook/sam3/tree/main)
 
 ## Quick Start
 
@@ -189,7 +197,6 @@ The project includes dataset-specific training scripts:
 - `20cities_train.sh`: Training for US-Cities dataset
 - `octa500_train.sh`: Training for OCTA500 dataset
 - `toulouse_train.sh`: Training for Toulouse dataset
-- `spacenet_train.sh`: Training for SpaceNet dataset
 
 **For detailed training instructions, see `VisAdj/training/TRAINING_GUIDE.md`**.
 
