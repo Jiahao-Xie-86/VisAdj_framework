@@ -1756,7 +1756,7 @@ def main():
     
     # Model parameters
     parser.add_argument('--sam-version', type=str, default='vit_b',
-                        choices=['vit_b', 'vit_l', 'vit_h', 'sam2_base_plus', 'sam2_large', 'sam2_tiny', 'sam2_small'],
+                        choices=['vit_b', 'vit_l', 'vit_h', 'sam2_base_plus', 'sam2_large', 'sam2_tiny', 'sam2_small', 'sam3'],
                         help='SAM model version')
     parser.add_argument('--sam-checkpoint', type=str, default=None,
                         help='Path to SAM checkpoint (.pth/.pt). If omitted, defaults to sam_checkpoint/sam_vit_*.pth based on --sam-version.')
@@ -1910,6 +1910,7 @@ def main():
     checkpoint_root = Path(__file__).parent.parent
     sam_v1_dir = checkpoint_root / 'sam_checkpoint'
     sam2_dir = checkpoint_root / 'sam2_checkpoints'
+    sam3_dir = checkpoint_root / 'sam3_checkpoints'
 
     version_to_filename = {
         'vit_b': ('sam_vit_b.pth', None),
@@ -1919,6 +1920,7 @@ def main():
         'sam2_large': ('sam2.1_hiera_large.pt', 'sam2.1_hiera_l.yaml'),
         'sam2_tiny': ('sam2.1_hiera_tiny.pt', 'sam2.1_hiera_t.yaml'),
         'sam2_small': ('sam2.1_hiera_small.pt', 'sam2.1_hiera_s.yaml'),
+        'sam3': ('sam3.pt', None),
     }
 
     candidate_name, candidate_config_name = version_to_filename.get(
@@ -1927,10 +1929,21 @@ def main():
     )
 
     if sam_checkpoint_path is None or not sam_checkpoint_path.is_file():
-        candidate_dir = sam2_dir if args.sam_version.startswith('sam2') else sam_v1_dir
+        if args.sam_version.startswith('sam3'):
+            candidate_dir = sam3_dir
+        elif args.sam_version.startswith('sam2'):
+            candidate_dir = sam2_dir
+        else:
+            candidate_dir = sam_v1_dir
         candidate_path = candidate_dir / candidate_name
         if candidate_path.is_file():
             sam_checkpoint_path = candidate_path
+        elif args.sam_version.startswith('sam3') and candidate_dir.is_dir():
+            sam3_candidates = []
+            for pattern in ('*.pt', '*.pth', '*.ckpt'):
+                sam3_candidates.extend(sorted(candidate_dir.glob(pattern)))
+            if sam3_candidates:
+                sam_checkpoint_path = sam3_candidates[0]
 
     if args.sam_version.startswith('sam2'):
         if sam_config_path is None or not sam_config_path.is_file():
@@ -1945,12 +1958,22 @@ def main():
             )
 
     if sam_checkpoint_path is None or not sam_checkpoint_path.is_file():
-        raise FileNotFoundError(
-            f"SAM checkpoint not found. "
-            f"Checked provided path ({args.sam_checkpoint}) and inferred path ({candidate_path if 'candidate_path' in locals() else 'N/A'}). "
-            "Please provide a valid --sam-checkpoint path."
-        )
-    args.sam_checkpoint = str(sam_checkpoint_path.resolve())
+        if args.sam_version.startswith('sam3'):
+            logger.warning(
+                "SAM3 checkpoint not found under %s and --sam-checkpoint was not valid. "
+                "The SAM3 builder will try its default/Hugging Face loading path.",
+                sam3_dir,
+            )
+        else:
+            raise FileNotFoundError(
+                f"SAM checkpoint not found. "
+                f"Checked provided path ({args.sam_checkpoint}) and inferred path ({candidate_path if 'candidate_path' in locals() else 'N/A'}). "
+                "Please provide a valid --sam-checkpoint path."
+            )
+    if sam_checkpoint_path is not None and sam_checkpoint_path.is_file():
+        args.sam_checkpoint = str(sam_checkpoint_path.resolve())
+    else:
+        args.sam_checkpoint = None
     if sam_config_path is not None:
         args.sam_config = str(sam_config_path.resolve())
     

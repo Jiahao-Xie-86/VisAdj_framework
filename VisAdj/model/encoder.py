@@ -11,6 +11,7 @@ import torch.nn.functional as F
 from typing import Dict, Optional, List
 import sys
 import math
+import inspect
 from pathlib import Path
 
 
@@ -136,15 +137,29 @@ class SAM2Encoder(nn.Module):
         self.freeze = freeze
         self.config_path = config_path
         self.using_sam2 = False
+        self.using_sam3 = False
         self._feature_dim = 256  # default neck dim
         self.sam2_model = None
+        self.sam3_model = None
+        self.sam3_input_size = 1008
+        self.sam3_feature_projections = nn.ModuleDict({
+            "64": nn.Conv2d(64, self._feature_dim, kernel_size=1),
+            "128": nn.Conv2d(128, self._feature_dim, kernel_size=1),
+            "512": nn.Conv2d(512, self._feature_dim, kernel_size=1),
+            "768": nn.Conv2d(768, self._feature_dim, kernel_size=1),
+            "1024": nn.Conv2d(1024, self._feature_dim, kernel_size=1),
+            "1280": nn.Conv2d(1280, self._feature_dim, kernel_size=1),
+        })
         self.encoder_global_attn_indexes = None  # Will be set during encoder initialization
         self.use_lora = False
         self.lora_rank = None
         self.lora_w_As = []  # LoRA A matrices (down projection)
         self.lora_w_Bs = []  # LoRA B matrices (up projection)
         
-        if config_path or sam_version.startswith('sam2'):
+        if sam_version.startswith('sam3'):
+            self.using_sam3 = True
+            self._init_sam3_encoder(checkpoint_path)
+        elif config_path or sam_version.startswith('sam2'):
             self.using_sam2 = True
             self._init_sam2_encoder(config_path, checkpoint_path)
         else:
@@ -205,6 +220,40 @@ class SAM2Encoder(nn.Module):
         
         if checkpoint_path:
             self.load_checkpoint(checkpoint_path)
+
+    def _init_sam3_encoder(self, checkpoint_path: Optional[str]):
+        """Initialize the official SAM3 image model and expose its vision backbone."""
+        checkpoint_path = checkpoint_path or None
+        try:
+            from sam3.model_builder import build_sam3_image_model
+        except ImportError:
+            try:
+                from sam3 import build_sam3_image_model
+            except ImportError as exc:
+                raise ImportError(
+                    "SAM3 support requires the official facebookresearch/sam3 package.\n"
+                    "Install it in the training environment, then rerun with --sam-version sam3.\n"
+                    "Expected usage: pip install -e /path/to/facebookresearch/sam3"
+                ) from exc
+
+        build_kwargs = {
+            "checkpoint_path": checkpoint_path,
+            "device": "cpu",
+            "eval_mode": True,
+            "load_from_HF": checkpoint_path is None,
+        }
+        try:
+            signature = inspect.signature(build_sam3_image_model)
+            build_kwargs = {k: v for k, v in build_kwargs.items() if k in signature.parameters}
+        except (TypeError, ValueError):
+            build_kwargs = {k: v for k, v in build_kwargs.items() if v is not None}
+
+        self.sam3_model = build_sam3_image_model(**build_kwargs)
+        self.sam3_model.to(dtype=torch.bfloat16)
+        self.sam3_model.eval()
+        self.encoder = getattr(self.sam3_model, "backbone", self.sam3_model)
+        if hasattr(self.encoder, "eval"):
+            self.encoder.eval()
 
     def _init_sam2_encoder(self, config_path: Optional[str], checkpoint_path: Optional[str]):
         if not HYDRA_AVAILABLE:
@@ -316,7 +365,12 @@ class SAM2Encoder(nn.Module):
         """Load SAM checkpoint."""
         checkpoint = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
         
-        if self.using_sam2:
+        if self.using_sam3:
+            raise RuntimeError(
+                "SAM3 checkpoints are loaded by build_sam3_image_model during initialization; "
+                "direct load_checkpoint() is not used for SAM3."
+            )
+        elif self.using_sam2:
             if 'model' in checkpoint:
                 state_dict = checkpoint['model']
             elif 'state_dict' in checkpoint:
@@ -458,6 +512,12 @@ class SAM2Encoder(nn.Module):
         """
         self.use_lora = True
         self.lora_rank = lora_rank
+        if self.using_sam3:
+            raise NotImplementedError(
+                "LoRA for SAM3 is not enabled yet because the official SAM3 backbone "
+                "does not share a stable block.attn.qkv path with SAM/SAM2 in this wrapper. "
+                "Run the SAM3 benchmark with the frozen encoder first."
+            )
         
         # Freeze encoder first
         for param in self.encoder.parameters():
@@ -538,14 +598,27 @@ class SAM2Encoder(nn.Module):
         """
         # Normalize pixels
         x = (x - self.pixel_mean) / self.pixel_std
+        encoder_input = x
+        if self.using_sam3 and x.shape[-2:] != (self.sam3_input_size, self.sam3_input_size):
+            encoder_input = F.interpolate(
+                x,
+                size=(self.sam3_input_size, self.sam3_input_size),
+                mode="bilinear",
+                align_corners=False,
+            )
         
         # Encode
         if self.freeze:
             with torch.no_grad():
-                features = self.encoder(x)
+                features = self._forward_sam3_image(encoder_input.to(torch.bfloat16)) if self.using_sam3 else self.encoder(encoder_input)
         else:
-            features = self.encoder(x)
+            features = self._forward_sam3_image(encoder_input.to(torch.bfloat16)) if self.using_sam3 else self.encoder(encoder_input)
         
+        if self.using_sam3:
+            features = self._extract_sam3_spatial_feature(features)
+            features = self._adapt_sam3_feature_map(features, x)
+            return features
+
         if isinstance(features, dict):
             if 'backbone_fpn' in features:
                 features = features['backbone_fpn'][0]
@@ -556,6 +629,93 @@ class SAM2Encoder(nn.Module):
         if isinstance(features, (list, tuple)):
             features = features[0]
         
+        return features
+
+    def _forward_sam3_image(self, x: torch.Tensor):
+        """Call the SAM3 image backbone using the most common official entry points."""
+        if self.sam3_model is not None:
+            backbone = getattr(self.sam3_model, "backbone", None)
+            if backbone is not None and hasattr(backbone, "forward_image"):
+                return backbone.forward_image(x)
+            if hasattr(self.sam3_model, "forward_image"):
+                return self.sam3_model.forward_image(x)
+        if hasattr(self.encoder, "forward_image"):
+            return self.encoder.forward_image(x)
+        return self.encoder(x)
+
+    def _collect_4d_tensors(self, value) -> List[torch.Tensor]:
+        """Collect spatial tensors from nested SAM3 outputs."""
+        tensors = []
+        if torch.is_tensor(value):
+            if value.dim() == 4:
+                tensors.append(value)
+            return tensors
+        if isinstance(value, dict):
+            for nested in value.values():
+                tensors.extend(self._collect_4d_tensors(nested))
+            return tensors
+        if isinstance(value, (list, tuple)):
+            for nested in value:
+                tensors.extend(self._collect_4d_tensors(nested))
+        return tensors
+
+    def _to_nchw(self, feature: torch.Tensor) -> torch.Tensor:
+        """Normalize SAM3 spatial features to [B, C, H, W]."""
+        if feature.dim() != 4:
+            raise ValueError(f"Expected a 4D SAM3 feature map, got shape {tuple(feature.shape)}")
+        if feature.shape[-1] > feature.shape[1] and feature.shape[1] == feature.shape[2]:
+            feature = feature.permute(0, 3, 1, 2).contiguous()
+        return feature
+
+    def _extract_sam3_spatial_feature(self, features) -> torch.Tensor:
+        """Choose the SAM3 FPN level closest to the current 1/16 graph feature scale."""
+        preferred_keys = [
+            "backbone_fpn",
+            "image_features",
+            "vision_features",
+            "fpn_features",
+            "multi_scale_features",
+            "sam2_backbone_out",
+        ]
+        candidates = []
+        if isinstance(features, dict):
+            for key in preferred_keys:
+                if key in features:
+                    candidates.extend(self._collect_4d_tensors(features[key]))
+            if not candidates:
+                candidates.extend(self._collect_4d_tensors(features))
+        else:
+            candidates.extend(self._collect_4d_tensors(features))
+        if not candidates:
+            raise RuntimeError(
+                "Could not find a 4D spatial feature map in SAM3 output. "
+                "Run a SAM3 smoke test and inspect backbone.forward_image() keys/shapes."
+            )
+
+        target_size = max(1, self.image_size // 16)
+
+        def score(tensor: torch.Tensor) -> int:
+            tensor = self._to_nchw(tensor)
+            return abs(tensor.shape[-2] - target_size) + abs(tensor.shape[-1] - target_size)
+
+        return self._to_nchw(min(candidates, key=score)).float()
+
+    def _adapt_sam3_feature_map(self, features: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
+        """Project SAM3 features to 256 channels and resize to the expected 1/16 grid."""
+        if features.shape[1] != self._feature_dim:
+            projection_key = str(features.shape[1])
+            if projection_key not in self.sam3_feature_projections:
+                raise RuntimeError(
+                    f"SAM3 produced {features.shape[1]} channels, but this wrapper only has "
+                    "predefined 1x1 projections for common channel sizes. Add a projection "
+                    "for this channel count in SAM2Encoder.sam3_feature_projections."
+                )
+            projection = self.sam3_feature_projections[projection_key]
+            features = projection(features)
+
+        target_hw = (max(1, x.shape[-2] // 16), max(1, x.shape[-1] // 16))
+        if features.shape[-2:] != target_hw:
+            features = F.interpolate(features, size=target_hw, mode="bilinear", align_corners=False)
         return features
     
     def get_feature_scales(self) -> Dict[str, int]:
