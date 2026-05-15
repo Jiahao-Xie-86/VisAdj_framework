@@ -5,7 +5,7 @@ Generate benchmark dataset from OCTA500 vessel network dataset.
 Dataset characteristics:
 - 500 images at 400×400 resolution
 - Split: 300 train, 100 validation, 100 test (by image)
-- Extract overlapping 128×128 patches from each image
+- Extract overlapping 256×256 patches from each image
 - Extract graphs from segmentation masks using skeletonization
 """
 
@@ -86,7 +86,7 @@ def _extract_graph_from_mask_standalone(mask: np.ndarray, curvature_threshold: f
     This is a copy of the class method but at module level for pickling.
     """
     # Binarize mask
-    binary_mask = (mask > 128).astype(np.uint8)
+    binary_mask = (mask > 256).astype(np.uint8)
     
     # Skeletonize
     skel = skeletonize(binary_mask).astype(np.uint8)
@@ -309,12 +309,12 @@ def _extract_patches_from_image(args):
             if patch_graph is None or len(patch_graph.nodes()) < 2:
                 continue  # Skip patches with insufficient graph data
             
-            # Resize image and mask to output_size (128x128)
+            # Resize image and mask to output_size (256x256)
             patch_image_resized = cv2.resize(patch_image, (output_size, output_size), interpolation=cv2.INTER_LINEAR)
             patch_mask_resized = cv2.resize(patch_mask, (output_size, output_size), interpolation=cv2.INTER_NEAREST)
             
             # Scale graph coordinates to match resized image
-            scale_factor = output_size / patch_size  # e.g., 128/64 = 2.0
+            scale_factor = output_size / patch_size  # e.g., 256/64 = 2.0
             patch_graph_scaled = patch_graph.copy()
             for node in patch_graph_scaled.nodes():
                 row = patch_graph_scaled.nodes[node]['row']
@@ -325,9 +325,9 @@ def _extract_patches_from_image(args):
             patches.append({
                 'image_id': image_id,
                 'patch_coords': (x_start, y_start),
-                'image': patch_image_resized,  # Already resized to 128x128
-                'mask': patch_mask_resized,  # Already resized to 128x128
-                'graph': patch_graph_scaled  # Coordinates scaled to 128x128
+                'image': patch_image_resized,  # Already resized to 256x256
+                'mask': patch_mask_resized,  # Already resized to 256x256
+                'graph': patch_graph_scaled  # Coordinates scaled to 256x256
             })
     
     return patches
@@ -339,7 +339,7 @@ class OCTA500BenchmarkDatasetGenerator:
         raw_data_path: str,
         output_path: str,
         patch_size: int = 64,  # Extract patches at this size
-        output_size: int = 128,  # Resize patches to this size
+        output_size: int = 256,  # Resize patches to this size
         overlap: int = 16,  # 25% overlap (64 * 0.25 = 16)
         max_samples_per_split: Optional[int] = None,
         max_nodes: Optional[int] = None,  # Filter out samples with more nodes than this
@@ -347,7 +347,7 @@ class OCTA500BenchmarkDatasetGenerator:
         self.raw_data_path = Path(raw_data_path)
         self.output_path = Path(output_path)
         self.patch_size = patch_size  # Extraction size (64x64)
-        self.output_size = output_size  # Output size after resize (128x128)
+        self.output_size = output_size  # Output size after resize (256x256)
         self.overlap = overlap
         self.stride = patch_size - overlap
         self.max_samples_per_split = max_samples_per_split
@@ -370,7 +370,7 @@ class OCTA500BenchmarkDatasetGenerator:
             NetworkX tree graph with key nodes only, connected by straight edges
         """
         # Binarize mask
-        binary_mask = (mask > 128).astype(np.uint8)
+        binary_mask = (mask > 256).astype(np.uint8)
         
         # Skeletonize
         skel = skeletonize(binary_mask).astype(np.uint8)
@@ -713,7 +713,7 @@ class OCTA500BenchmarkDatasetGenerator:
         # Adaptive node radius based on image size
         if min(w, h) <= 64:
             node_radius = 2
-        elif min(w, h) <= 128:
+        elif min(w, h) <= 256:
             node_radius = 3
         elif min(w, h) <= 256:
             node_radius = 5
@@ -732,13 +732,13 @@ class OCTA500BenchmarkDatasetGenerator:
         # Use GT mask patch directly as edge mask (no simplification)
         if gt_mask_patch is not None:
             # Use original GT mask patch directly
-            edge_mask = (gt_mask_patch > 128).astype(np.uint8) * 255
+            edge_mask = (gt_mask_patch > 256).astype(np.uint8) * 255
         else:
             # Fallback: generate from graph (shouldn't happen in normal flow)
             edge_mask = np.zeros((h, w), dtype=np.uint8)
             if min(w, h) <= 64:
                 edge_width = 1
-            elif min(w, h) <= 128:
+            elif min(w, h) <= 256:
                 edge_width = 2
             elif min(w, h) <= 256:
                 edge_width = 3
@@ -803,7 +803,7 @@ class OCTA500BenchmarkDatasetGenerator:
     def extract_patches(self, image: np.ndarray, mask: np.ndarray, image_id: str) -> List[Dict]:
         """
         Extract overlapping patches from an image and extract graph from each mask patch.
-        Patches are extracted at patch_size (64x64) and resized to output_size (128x128).
+        Patches are extracted at patch_size (64x64) and resized to output_size (256x256).
         This is much faster than extracting from the full image first.
         """
         patches = []
@@ -824,12 +824,12 @@ class OCTA500BenchmarkDatasetGenerator:
                 if patch_graph is None or len(patch_graph.nodes()) < 2:
                     continue  # Skip patches with insufficient graph data
                 
-                # Resize image and mask to output_size (128x128)
+                # Resize image and mask to output_size (256x256)
                 patch_image_resized = cv2.resize(patch_image, (self.output_size, self.output_size), interpolation=cv2.INTER_LINEAR)
                 patch_mask_resized = cv2.resize(patch_mask, (self.output_size, self.output_size), interpolation=cv2.INTER_NEAREST)
                 
                 # Scale graph coordinates to match resized image
-                scale_factor = self.output_size / self.patch_size  # e.g., 128/64 = 2.0
+                scale_factor = self.output_size / self.patch_size  # e.g., 256/64 = 2.0
                 patch_graph_scaled = patch_graph.copy()
                 for node in patch_graph_scaled.nodes():
                     row = patch_graph_scaled.nodes[node]['row']
@@ -842,9 +842,9 @@ class OCTA500BenchmarkDatasetGenerator:
                 patches.append({
                     'image_id': image_id,
                     'patch_coords': (x_start, y_start),
-                    'image': patch_image_resized,  # Already resized to 128x128
-                    'mask': patch_mask_resized,  # Already resized to 128x128
-                    'graph': patch_graph_scaled  # Coordinates scaled to 128x128
+                    'image': patch_image_resized,  # Already resized to 256x256
+                    'mask': patch_mask_resized,  # Already resized to 256x256
+                    'graph': patch_graph_scaled  # Coordinates scaled to 256x256
                 })
         
         return patches
@@ -963,7 +963,7 @@ class OCTA500BenchmarkDatasetGenerator:
                         image_path,
                         mask_path,
                         self.patch_size,  # Extract at this size (64)
-                        self.output_size,  # Resize to this size (128)
+                        self.output_size,  # Resize to this size (256)
                         self.stride,
                         self.curvature_threshold,
                         None,  # min_node_distance will be computed per patch
@@ -1104,7 +1104,7 @@ class OCTA500BenchmarkDatasetGenerator:
         dataset_info = {
             'dataset_name': 'OCTA500',
             'patch_size': self.patch_size,  # Extraction size (64)
-            'output_size': self.output_size,  # Output size after resize (128)
+            'output_size': self.output_size,  # Output size after resize (256)
             'overlap': self.overlap,
             'stride': self.stride,
             'max_nodes': self.max_nodes,
@@ -1125,7 +1125,7 @@ def main():
     parser.add_argument('--raw_data_path', type=str, required=True, help='Path to raw OCTA500 dataset')
     parser.add_argument('--output_path', type=str, required=True, help='Output path for benchmark dataset')
     parser.add_argument('--patch_size', type=int, default=64, help='Patch extraction size (default: 64)')
-    parser.add_argument('--output_size', type=int, default=128, help='Output size after resize (default: 128)')
+    parser.add_argument('--output_size', type=int, default=256, help='Output size after resize (default: 256)')
     parser.add_argument('--overlap', type=int, default=16, help='Overlap between patches (default: 16, 25% overlap for 64x64)')
     parser.add_argument('--max_samples_per_split', type=int, default=None, help='Maximum samples per split (for testing)')
     parser.add_argument('--max_nodes', type=int, default=None, help='Filter out samples with more nodes than this')
