@@ -36,8 +36,7 @@ This project implements a novel architecture that extracts graph structures from
 │   │   ├── full_train.sh            # Full training script
 │   │   ├── 20cities_train.sh        # Dataset-specific scripts
 │   │   ├── octa500_train.sh
-│   │   ├── toulouse_train.sh
-│   │   └── TRAINING_GUIDE.md        # Training guide
+│   │   └── toulouse_train.sh        
 │   ├── inference/                   # Inference and evaluation scripts
 │   │   ├── infer_model.py           # Inference script
 │   │   └── run_inference_and_eval*.sh  # Evaluation scripts
@@ -177,7 +176,7 @@ cd VisAdj/training
 python train.py \
     --dataset-root /path/to/dataset/processed/full_complete_benchmark_dataset \
     --output-dir outputs/full_training \
-    --sam-version sam2_tiny \
+    --sam-version "vit-b" \
     --batch-size 96 \
     --num-epochs 200 \
     --gpus 4 \
@@ -197,8 +196,7 @@ The project includes dataset-specific training scripts:
 - `20cities_train.sh`: Training for US-Cities dataset
 - `octa500_train.sh`: Training for OCTA500 dataset
 - `toulouse_train.sh`: Training for Toulouse dataset
-
-**For detailed training instructions, see `VisAdj/training/TRAINING_GUIDE.md`**.
+  
 
 ### 3. Inference and Evaluation
 
