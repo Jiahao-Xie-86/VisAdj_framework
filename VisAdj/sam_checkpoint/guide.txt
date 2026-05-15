@@ -1,0 +1,1 @@
+download sam checkpoints and place in this folder
