@@ -7,6 +7,7 @@ Runs inference on test/val set and saves predicted adjacency matrices.
 import torch
 import numpy as np
 import sys
+import inspect
 from pathlib import Path
 from tqdm import tqdm
 import json
@@ -65,8 +66,27 @@ def load_model_from_checkpoint(checkpoint_path, device='cuda'):
         logger.warning(f"sam_version is not a string: {hparams.get('sam_version')}, defaulting to 'vit_b'")
         hparams['sam_version'] = 'vit_b'
     
-    # Unpack hparams dict as keyword arguments
-    model = SAMGraphSplitLightning(**hparams)
+    # Checkpoints may contain training-only hyperparameters from newer versions.
+    # Keep the full hparams dict for inference, but only pass constructor
+    # arguments understood by the currently imported LightningModule.
+    init_signature = inspect.signature(SAMGraphSplitLightning.__init__)
+    valid_init_args = {
+        name for name in init_signature.parameters
+        if name != 'self'
+    }
+    model_hparams = {
+        key: value for key, value in hparams.items()
+        if key in valid_init_args
+    }
+    ignored_hparams = sorted(set(hparams) - set(model_hparams))
+    if ignored_hparams:
+        logger.info(
+            "Ignoring checkpoint hyperparameters not used for model construction: %s",
+            ignored_hparams,
+        )
+
+    # Unpack compatible hparams dict as keyword arguments
+    model = SAMGraphSplitLightning(**model_hparams)
     model.load_state_dict(checkpoint['state_dict'], strict=False)
     model = model.to(device)
     model.eval()
