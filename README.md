@@ -37,7 +37,7 @@ VisAdj extracts graph structure from visual node-link representations. Given an 
 | Top-$K$ neighbors per node $K$ | 8 for Toulouse and 12 for other datasets |
 | Number of Bézier samples $N_v$ | 9 |
 | Visual feature neighborhood radius $r_n$ | 3 |
-| Node matching threshold $\tau_d$ | 8 |
+| Node matching threshold $\tau_d$ |4 for Toulouse and 8 for other datasets|
 | Gaussian noise std. $\sigma$ | 0.1 |
 | Node loss weight $\lambda_{\text{node}}$ | 1 |
 | Edge loss weight $\lambda_{\text{edge}}$ | 10 |
