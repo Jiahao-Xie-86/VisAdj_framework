@@ -15,5 +15,5 @@ python3 dataset/create_toulouse_benchmark_dataset.py \
 
 echo ""
 echo "Dataset generation complete!"
-echo "Location: dataset/processed/toulouse_benchmark_128x128"
+echo "Location: dataset/processed/toulouse_benchmark"
 
