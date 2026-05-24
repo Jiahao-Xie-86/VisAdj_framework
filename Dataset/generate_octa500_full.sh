@@ -6,7 +6,7 @@
 
 python3 dataset/create_octa500_benchmark_dataset.py \
     --raw_data_path dataset/raw/OCTA500 \
-    --output_path dataset/processed/octa500_benchmark_128x128 \
+    --output_path dataset/processed/octa500_benchmark \
     --patch_size 256 \
     --output_size 256 \
     --overlap 0 \
