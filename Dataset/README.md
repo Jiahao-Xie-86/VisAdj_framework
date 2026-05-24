@@ -117,13 +117,6 @@ Generate Toulouse benchmark dataset:
 bash generate_toulouse_full.sh
 ```
 
-Or manually (update path if needed):
-```bash
-python create_toulouse_benchmark_dataset.py \
-    --raw_data_path raw/Toulouse \
-    --output_path processed/toulouse_benchmark_128x128 \
-    --image_size 128 128
-```
 
 ---
 
@@ -135,15 +128,6 @@ Generate 20cities benchmark dataset:
 bash generate_20cities_full.sh
 ```
 
-Or manually (update path if needed):
-```bash
-python create_20cities_benchmark_dataset.py \
-    --raw_data_path raw/US-Cities \
-    --output_path processed/20cities_benchmark_128x128 \
-    --patch_size 128 \
-    --overlap 6 \
-    --curvature_threshold 160.0
-```
 
 ---
 
