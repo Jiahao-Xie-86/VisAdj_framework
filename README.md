@@ -30,7 +30,7 @@ VisAdj extracts graph structure from visual node-link representations. Given an 
 | Ratio of global feature map $\lambda_G$ | 4 |
 | Number of topology tokens $K_T$ | 16 |
 | Node peak confidence threshold $\tau$ | 0.5 |
-| NMS neighbor radius $r$ | 15 |
+| NMS neighbor radius $r$ | 15 for synthetic dataset and 10 for other datasets |
 | Soft-argmax temperature $T$ | 0.2 |
 | Number of ASNS attention heads $N_h$ | 8 |
 | Entmax sparsity parameter $\alpha_{ent}$ | 1.5 |
