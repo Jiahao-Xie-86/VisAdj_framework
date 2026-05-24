@@ -10,7 +10,7 @@ echo ""
 cd /usa/jiahaox/Image2matrix_baselines
 
 python3 dataset/create_toulouse_benchmark_dataset.py \
-    --output_path dataset/processed/toulouse_benchmark_128x128 \
+    --output_path dataset/processed/toulouse_benchmark \
     --image_size 64 64
 
 echo ""
