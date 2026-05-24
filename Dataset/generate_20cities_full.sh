@@ -14,12 +14,12 @@ cd /usa/jiahaox/Image2matrix_baselines
 
 python3 dataset/create_20cities_benchmark_dataset.py \
     --raw_data_path dataset/raw/20cities \
-    --output_path dataset/processed/20cities_benchmark_128x128 \
+    --output_path dataset/processed/20cities_benchmark \
     --patch_size 128 \
     --overlap 6 \
     --curvature_threshold 160.0
 
 echo ""
 echo "Dataset generation complete!"
-echo "Location: dataset/processed/20cities_benchmark_128x128"
+echo "Location: dataset/processed/20cities_benchmark"
 
