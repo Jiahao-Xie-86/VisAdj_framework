@@ -117,7 +117,7 @@ The model consists of several key components:
 
 1. **SAM Encoder**: Frozen visual encoder that extracts rich visual features from input images
 2. **Dual-Stream Extractor**: 
-   - **Local stream**: High-resolution features at encoder grid resolution (32×32 for 512×512 input)
+   - **Local stream**: High-resolution features at encoder grid resolution (32×32)
    - **Global stream**: Downsampled features for topology understanding (8×8)
 3. **Node Detector**: Predicts node locations using heatmap-based detection with NMS
 4. **Neighbor Sampler**: ASNS (Attention-Sparse Neighbor Sampler) or KNN-based sampling for efficient edge candidate selection
