@@ -48,6 +48,7 @@ VisAdj extracts graph structure from visual node-link representations. Given an 
 | Focal loss focusing $\gamma$ | 0.5 |
 | Coverage smoothing $\alpha_s$ | 0.2 |
 | Teacher-forcing decay length $T_s$ | 30 |
+| Edge threshold | 0.5 |
 
 ## Project Structure
 
