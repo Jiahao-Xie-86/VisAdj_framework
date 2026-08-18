@@ -1,4 +1,4 @@
-# VisAdj: Learning Adjacency Matrices From Node-Link Images
+# VisAdj: Learning Adjacency Matrices From Node-Link Images (CIKM 2026)
 
 A SAM-family image-to-graph framework that predicts adjacency matrices from node-link images with adaptive candidate sampling and line-graph edge reasoning.
 
